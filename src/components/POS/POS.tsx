@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MENU, ADDONS } from '../../constants/menu';
-import { ShoppingCart, Trash2, Plus, Minus, MoveRight, ChevronLeft, CreditCard, Banknote, ReceiptText, Search, Printer, Mail, Download, CheckCircle2, X } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, MoveRight, ChevronLeft, CreditCard, Banknote, ReceiptText, Search, Printer, Mail, Download, CheckCircle2, X, Edit2, Check } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import QRCode from 'qrcode';
 import { 
@@ -103,6 +103,8 @@ export function POS({ user }: { user: any }) {
   const [lastOrder, setLastOrder] = useState<any>(null);
   const [orderId, setOrderId] = useState<string>('');
   const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
+  const [editingPrice, setEditingPrice] = useState<string | null>(null);
+  const [customItemPrice, setCustomItemPrice] = useState<string>('');
 
   useEffect(() => {
     const unsubscribePrices = onSnapshot(doc(db, 'settings', 'products'), (snapshot) => {
@@ -194,6 +196,20 @@ export function POS({ user }: { user: any }) {
     setCart(prev => prev.map(item => 
       item.cartId === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
     ));
+  };
+
+  const updateItemPrice = (id: string, newPrice: number) => {
+    setCart(prev => prev.map(item => 
+      item.cartId === id ? { ...item, price: newPrice } : item
+    ));
+    setEditingPrice(null);
+    setCustomItemPrice('');
+    toast.success('Price updated');
+  };
+
+  const startEditingPrice = (id: string, currentPrice: number) => {
+    setEditingPrice(id);
+    setCustomItemPrice(currentPrice.toString());
   };
 
   const handleCheckout = async () => {
@@ -756,7 +772,65 @@ export function POS({ user }: { user: any }) {
                       <p className="font-black text-stone-800 dark:text-stone-100 text-base tracking-tight leading-none italic">{item.drinkName}</p>
                       <p className="text-[10px] font-black text-stone-400 dark:text-stone-500 uppercase tracking-[0.2em] mt-3">{item.size} • {item.flavor || item.category}</p>
                     </div>
-                    <p className="font-black text-stone-800 dark:text-stone-100 text-base">₱{(item.price * item.quantity).toFixed(2)}</p>
+                    <div className="flex items-center gap-2">
+                      {editingPrice === item.cartId ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-stone-400 font-black text-sm">₱</span>
+                          <input
+                            type="number"
+                            value={customItemPrice}
+                            onChange={(e) => setCustomItemPrice(e.target.value)}
+                            className="w-20 bg-white dark:bg-stone-900 border-2 border-lemon rounded-lg px-2 py-1 font-black text-stone-800 dark:text-stone-100 text-sm outline-none"
+                            autoFocus
+                            onBlur={() => {
+                              const newPrice = parseFloat(customItemPrice);
+                              if (!isNaN(newPrice) && newPrice > 0) {
+                                updateItemPrice(item.cartId, newPrice);
+                              } else {
+                                setEditingPrice(null);
+                                setCustomItemPrice('');
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const newPrice = parseFloat(customItemPrice);
+                                if (!isNaN(newPrice) && newPrice > 0) {
+                                  updateItemPrice(item.cartId, newPrice);
+                                } else {
+                                  setEditingPrice(null);
+                                  setCustomItemPrice('');
+                                }
+                              } else if (e.key === 'Escape') {
+                                setEditingPrice(null);
+                                setCustomItemPrice('');
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              const newPrice = parseFloat(customItemPrice);
+                              if (!isNaN(newPrice) && newPrice > 0) {
+                                updateItemPrice(item.cartId, newPrice);
+                              }
+                            }}
+                            className="w-8 h-8 bg-lemon text-stone-800 rounded-lg flex items-center justify-center hover:bg-zest transition-colors"
+                          >
+                            <Check size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <p className="font-black text-stone-800 dark:text-stone-100 text-base">₱{(item.price * item.quantity).toFixed(2)}</p>
+                          <button
+                            onClick={() => startEditingPrice(item.cartId, item.price)}
+                            className="w-6 h-6 flex items-center justify-center text-stone-300 hover:text-lemon transition-colors"
+                            title="Edit price"
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {item.addOns.length > 0 && (
